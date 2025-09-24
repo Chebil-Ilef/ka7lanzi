@@ -18,3 +18,6 @@ LLMODEL = LLM().get_llm()
 
 EMBEDDING_MODEL_NAME = str(os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-base-en-v1.5"))
 EMBEDDING_MODEL = HuggingFaceEmbedding(model_name=EMBEDDING_MODEL_NAME) # téléchargé une fois puis stocké dans ~/.cache/huggingface
+EMBEDDINGS_PATH = BASE_DIR / "embeddings"
+
+FEEDBACKS_PATH = BASE_DIR / "feedback/feedback.jsonl"

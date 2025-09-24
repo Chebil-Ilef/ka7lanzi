@@ -1,7 +1,9 @@
 import streamlit as st
-from core.tools import load_dataset_tool
 from config import DATA_DIR, ALLOWED_EXTENSIONS
+from core.managers.dataset_manager import DatasetManager
 
+# Initialize dataset manager
+manager = DatasetManager()
 
 def upload_dataset() -> str:
     """
@@ -14,12 +16,21 @@ def upload_dataset() -> str:
         if file_ext not in ALLOWED_EXTENSIONS:
             st.error("Invalid file type. Please upload a CSV, Excel, JSON, or Parquet file.")
             return ""
+
         save_path = DATA_DIR / uploaded_file.name
         with open(save_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
-        # Load into DatasetManager
-        response = load_dataset_tool(str(save_path))
-        st.success(response)
-        return uploaded_file.name  # dataset name
+        try:
+            df = manager.load(uploaded_file.name)
+            if df is None:
+                st.error("Failed to load dataset. Please check the file format.")
+                return ""
+            st.success(f"Dataset '{uploaded_file.name}' uploaded and loaded successfully! ✅")
+        except Exception as e:
+            st.error(f"Error loading dataset: {str(e)}")
+            return ""
+
+        return uploaded_file.name
+
     return ""

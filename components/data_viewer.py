@@ -1,30 +1,33 @@
 import streamlit as st
-from core.tools import show_head_tool, describe_tool
-from core.dataset_manager import DatasetManager
+import pandas as pd
+from core.managers.dataset_manager import DatasetManager
+from core.preview import TOOLS 
 
 manager = DatasetManager()
 
 def display_dataset_head(dataset_name: str, n: int = 5):
     """
-    Affiche les premières lignes d'un dataset
+    Display the first `n` rows of a dataset in a clean table.
     """
-    if not dataset_name or manager.load_dataset(dataset_name) is None:
-        st.warning("No dataset loaded yet.")
+    if not dataset_name:
+        st.warning("No dataset selected yet.")
         return
 
+    df_head = TOOLS["head"].fn(df=dataset_name, n=n)
+
     st.subheader(f"Preview of '{dataset_name}'")
-    head_str = show_head_tool(dataset_name, n)
-    st.text(head_str)
+    st.dataframe(df_head, use_container_width=True)
 
 
 def display_dataset_description(dataset_name: str):
     """
-    Affiche les statistiques du dataset
+    Display dataset statistics (numeric summary) in a clean table.
     """
-    if not dataset_name or manager.load_dataset(dataset_name) is None:
-        st.warning("No dataset loaded yet.")
+    if not dataset_name:
+        st.warning("No dataset selected yet.")
         return
 
+    df_desc = TOOLS["describe"].fn(df=dataset_name) 
+
     st.subheader(f"Description of '{dataset_name}'")
-    desc_str = describe_tool(dataset_name)
-    st.text(desc_str)
+    st.dataframe(df_desc, use_container_width=True)
