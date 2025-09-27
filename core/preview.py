@@ -1,12 +1,14 @@
 from llama_index.core.tools import FunctionTool
 from core.managers.dataset_manager import DatasetManager
+from config import DATA_DIR
 
 manager = DatasetManager()
 
 def show_head(dataset_name: str, n: int = 5):
     """Return the first n rows of the dataset."""
     try:
-        df = manager.get_dataset(dataset_name)
+        dataset_path = DATA_DIR / dataset_name
+        df = manager.load(dataset_path)
         if df is None:
             return f"❌ No dataset named '{dataset_name}' loaded."
         return df.head(n)
@@ -16,7 +18,8 @@ def show_head(dataset_name: str, n: int = 5):
 def describe_dataset(dataset_name: str):
     """Return basic statistics of the dataset."""
     try:
-        df = manager.get_dataset(dataset_name)
+        dataset_path = DATA_DIR / dataset_name
+        df = manager.load(dataset_path)
         if df is None:
             return f"❌ No dataset named '{dataset_name}' loaded."
         return df.describe(include="all")

@@ -1,11 +1,11 @@
 from core.managers.dataset_manager import DatasetManager
 from core.managers.index_manager import IndexManager
 from core.managers.feedback_manager import FeedbackManager
-from core.utils.planner import Planner
+# from core.utils.planner import Planner
 from core.utils.executor import Executor
 from core.utils.visualizer import Visualizer
 from core.llm import LLM
-from config import EMBEDDING_MODEL
+from config import EMBEDDING_MODEL, DATA_DIR
 
 class WorkflowAgent:
     def __init__(self, embeddings_model=EMBEDDING_MODEL, llm_client: LLM = None):
@@ -13,10 +13,11 @@ class WorkflowAgent:
         self.index_manager = IndexManager(embeddings_model=embeddings_model)
         self.visualizer = Visualizer()
         self.feedback = FeedbackManager()
-        self.llm = llm_client or LLM()
-        self.planner = Planner(self.llm)
+        # self.llm = llm_client or LLM()
+        # self.planner = Planner(self.llm)
 
-    def load_dataset(self, path: str):
+    def load_dataset(self, current_dataset_name: str):
+        path = DATA_DIR / current_dataset_name
         df = self.dataset_manager.load(path)
         return df
 

@@ -5,7 +5,7 @@ from core.managers.dataset_manager import DatasetManager
 # Initialize dataset manager
 manager = DatasetManager()
 
-def upload_dataset() -> str:
+def upload_dataset() -> str | None:
     """
     Composant pour uploader un dataset (CSV, Excel, JSON, Parquet)
     """
@@ -15,22 +15,22 @@ def upload_dataset() -> str:
         file_ext = f".{file_ext}"
         if file_ext not in ALLOWED_EXTENSIONS:
             st.error("Invalid file type. Please upload a CSV, Excel, JSON, or Parquet file.")
-            return ""
+            return None
 
         save_path = DATA_DIR / uploaded_file.name
         with open(save_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
         try:
-            df = manager.load(uploaded_file.name)
+            df = manager.load(save_path)
             if df is None:
                 st.error("Failed to load dataset. Please check the file format.")
-                return ""
-            st.success(f"Dataset '{uploaded_file.name}' uploaded and loaded successfully! ✅")
+                return None
+            st.success(f"Dataset '{uploaded_file.name}' uploaded and loaded successfully with shape {df.shape}!")
         except Exception as e:
             st.error(f"Error loading dataset: {str(e)}")
-            return ""
+            return None
 
         return uploaded_file.name
 
-    return ""
+    return None
