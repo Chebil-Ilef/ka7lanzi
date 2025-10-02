@@ -1,16 +1,15 @@
 import streamlit as st
+from matplotlib.figure import Figure
+from typing import List
 
-def display_results(answer: str = None, figs: list = None):
-    """
-    Affiche le dernier résultat de query
-    """
-    if 'last_query_result' in st.session_state:
-        if answer:
-            st.subheader("💡 Agent's Answer")
-            st.write(answer)
-        if figs:
-            st.subheader("📈 Visualizations")
-            for fig in figs:
-                st.pyplot(fig)
+def display_results(answer_text: str, figs: List[Figure]):
+    """Display the final answer text and associated figures."""
+    st.subheader("Answer")
+    st.markdown(answer_text)
+
+    if figs:
+        st.subheader("Visualizations")
+        for i, fig in enumerate(figs, 1):
+            st.pyplot(fig, clear_figure=True)
     else:
-        st.info("No query results yet.")
+        st.info("No visualizations generated for this query.")

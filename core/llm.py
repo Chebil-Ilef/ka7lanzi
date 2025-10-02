@@ -31,11 +31,14 @@ class LLM:
     def get_llm(self):
         return self.llm
 
-    def generate(self, messages: list) -> str:
+    def generate(self, messages: list|str) -> str:
         """
         Generate text from a list of chat messages.
         Each message should be a dict: {"role": "system|user|assistant", "content": str}
         """
+        if isinstance(messages, str):
+            messages = [{"role": "user", "content": messages}]
+        
         chat_prompt = ""
         for msg in messages:
             role = msg["role"]

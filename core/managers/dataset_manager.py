@@ -25,21 +25,6 @@ class DatasetManager:
         self.path = p
         return df
 
-    def column_summary(self) -> dict:
-        df = self.df
-        if df is None:
-            return {}
-        summary = {}
-        for c in df.columns:
-            s = df[c]
-            summary[c] = {
-                "dtype": str(s.dtype),
-                "n_missing": int(s.isna().sum()),
-                "unique": int(s.nunique()) if s.dtype == object else None,
-                "sample": s.dropna().head(5).tolist()
-            }
-        return summary
-
     def basic_stats_text(self) -> str:
         df = self.df
         if df is None:

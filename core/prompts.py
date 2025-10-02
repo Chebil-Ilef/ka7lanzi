@@ -1,70 +1,39 @@
-import json
+from llama_index.core.prompts import PromptTemplate
 
-PLANNER_INSTRUCTIONS = """
-You are a strict planner that receives:
- - QUESTION: a user's question (in French or English)
- - SUMMARY: a short dataset summary
- - COLUMNS: a list of column names
+PLANNER_PROMPT_TEMPLATE = """
+You are a strict data analysis planning agent.
 
-Return strictly valid JSON only. The JSON must have one top-level key "actions" whose value is a list of steps.
-Each step must be one of:
- - compute (name: correlation, groupby, filter, describe, topk, timeseries_aggregate)
- - visualize (name: heatmap, boxplot, scatter, histogram, timeseries)
- - answer (no name; params: {"style":"short"|"detailed"})
+You receive:
+- QUESTION: the user's question
+- SUMMARY: dataset description (rows, columns, dtypes, missing info)
+- COLUMNS: list of column names
 
-Do not include any commentary or extra text.
+Your task:
+1. Break the QUESTION into steps.
+2. Return a JSON plan with one top-level key: "actions".
+3. Each action must be one of:
+   - compute (name: correlation, groupby, filter, describe, topk, timeseries_aggregate)
+   - visualize (name: heatmap, boxplot, scatter, histogram, timeseries)
+   - answer (params: {"style": "short"|"detailed"})
+
+⚠️ Rules:
+- Every compute action MUST include the required parameters:
+  * correlation → must include either {"target": "<col>"} or {"columns": ["col1", "col2", ...]}
+  * groupby → must include {"by": "<col>", "target": "<col>", "agg": "mean"|"sum"|...}
+  * describe → must include {"columns": ["col1", "col2", ...]}
+- Always pair compute actions with at least one appropriate visualize action
+  (correlation → heatmap, groupby → boxplot, describe → histogram, timeseries_aggregate → timeseries).
+
+QUESTION: {question}
+SUMMARY: {summary}
+COLUMNS: {columns}
 """
 
-EXAMPLES = [
-    {
-        "question": "Quelle est la colonne ayant la plus forte corrélation avec 'sales' ?",
-        "summary": "Dataset with 10000 rows and columns: sales (float), advertising (float), price (float), region (category).",
-        "columns": ["sales", "advertising", "price", "region"],
-        "json": {
-            "actions": [
-                {"action": "compute", "name": "correlation", "params": {"target": "sales", "top_n": 3}},
-                {"action": "visualize", "name": "heatmap", "params": {"columns": ["sales", "advertising", "price"]}},
-                {"action": "answer", "params": {"style": "short"}}
-            ]
-        }
-    },
-    {
-        "question": "Donne la distribution de 'salary' par 'department' et montre la boxplot.",
-        "summary": "Dataset with 2000 rows and columns: salary (float), department (category), employee_id (int).",
-        "columns": ["salary", "department", "employee_id"],
-        "json": {
-            "actions": [
-                {"action": "compute", "name": "groupby", "params": {"by": "department", "agg": "median", "target": "salary"}},
-                {"action": "visualize", "name": "boxplot", "params": {"column": "salary", "by": "department"}},
-                {"action": "answer", "params": {"style": "detailed"}}
-            ]
-        }
-    }
-]
 
-def build_planner_prompt(question: str, summary: str, columns: list) -> list:
-    """
-    Returns a list of chat messages (ChatML format) for Qwen.
-    """
-    messages = [
-        {"role": "system", "content": PLANNER_INSTRUCTIONS.strip()}
-    ]
+planner_prompt = PromptTemplate(PLANNER_PROMPT_TEMPLATE)
 
-    for ex in EXAMPLES:
-        # include few-shot examples
-        messages.append({
-            "role": "user",
-            "content": f"QUESTION: {ex['question']}\nSUMMARY: {ex['summary']}\nCOLUMNS: {ex['columns']}"
-        })
-        messages.append({
-            "role": "assistant",
-            "content": json.dumps(ex["json"], ensure_ascii=False)
-        })
-
-    # final task
-    messages.append({
-        "role": "user",
-        "content": f"QUESTION: {question}\nSUMMARY: {summary}\nCOLUMNS: {columns}\nReturn STRICT JSON only."
-    })
-
-    return messages
+executor_prompt = PromptTemplate(
+    "Use the following analysis results to answer the user question clearly and concisely.\n\n"
+    "Results:\n{context}\n\n"
+    "Question: {question}\nAnswer:"
+)

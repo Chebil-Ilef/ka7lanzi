@@ -5,11 +5,13 @@ from core.managers.feedback_manager import FeedbackManager
 from core.utils.planner import Planner
 from core.utils.executor import Executor
 from core.utils.visualizer import Visualizer
+from core.prompts import executor_prompt
 from core.llm import LLM
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from config import EMBEDDING_MODEL, DATA_DIR, LLMODEL
 from typing import Optional
 import threading
+
 
 class WorkflowAgent:
     def __init__(self, ):
@@ -30,7 +32,7 @@ class WorkflowAgent:
         self.visualizer = Visualizer()
         self.feedback = FeedbackManager()
         self.llm = llm_client
-        self.planner = Planner(self.llm)
+        self.planner = Planner(self.llm, self.dataset_manager.df)
         self._init_started = True
 
     def start_async_init(self, llm_client: LLM = LLMODEL):
@@ -43,6 +45,7 @@ class WorkflowAgent:
     def load_dataset(self, current_dataset_name: str):
         path = DATA_DIR / current_dataset_name
         df = self.dataset_manager.load(path)
+        self.dataset_manager.df = df
         return df
 
     def build_index(self):
@@ -54,14 +57,10 @@ class WorkflowAgent:
     def ask(self, question: str):
         # --- State Validation ---
         if not self._init_finished:
-            raise RuntimeError(
-                "Agent is not initialized."
-            )
+            raise RuntimeError("Agent is not initialized.")
 
         if self.dataset_manager.df is None:
-            raise ValueError(
-                "No dataset loaded."
-            )
+            raise ValueError("No dataset loaded.")
 
         if self.planner is None:
             raise RuntimeError("Planner is not initialized.")
@@ -87,43 +86,18 @@ class WorkflowAgent:
         except Exception as e:
             raise RuntimeError(f"Error executing the plan: {e}") from e
 
-        figs = []
-        textual_parts = []
-
         # --- Post-process results ---
         try:
-            for r in exec_results:
-                if r["type"] == "compute" and r["name"] == "correlation":
-                    top = r.get("value")
-                    if top is not None:
-                        textual_parts.append(f"Top correlations:\n{top.to_string()}")
-                        cols = [r["meta"]["target"]] + top.index.tolist()
-                        figs.append(self.visualizer.heatmap(df, cols))
-
-                elif r["type"] == "compute" and r["name"] == "groupby":
-                    grp = r.get("value")
-                    if grp is not None:
-                        textual_parts.append(f"Groupby result:\n{grp.to_string(index=False)}")
-
-                elif r["type"] == "visualize":
-                    name = r.get("name")
-                    params = r.get("params", {})
-                    if name == "heatmap" and "columns" in params:
-                        figs.append(self.visualizer.heatmap(df, params["columns"]))
-
-                elif r["type"] == "answer":
-                    context = "\n\n".join(textual_parts) if textual_parts else "No prior results."
-                    try:
-                        final_answer = self.llm.generate(
-                            f"Using the following results:\n{context}\nAnswer: {question}"
-                        )
-                        textual_parts.append(final_answer)
-                    except Exception as e:
-                        textual_parts.append(f"[LLM Error: Failed to generate final answer: {e}]")
+            
+            context, textual_parts, figs = executor.render_results(exec_results)
+            try:
+                final_answer = self.llm.generate(executor_prompt.format(context=context, question=question))
+            except Exception as e:
+                raise RuntimeError(f"[LLM Error: Failed to generate final answer: {e}]")
 
         except Exception as e:
             raise RuntimeError(f"Error during post-processing of execution results: {e}") from e
 
         # --- Final answer ---
-        answer_text = "\n\n".join(textual_parts) if textual_parts else "No meaningful results produced."
+        answer_text = final_answer if final_answer else "No meaningful results produced."
         return {"answer": answer_text, "figs": figs, "plan": plan}

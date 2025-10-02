@@ -15,7 +15,7 @@ class IndexManager:
         self.vector_store = ChromaVectorStore(chroma_collection=self.collection)
         self.index = None
 
-    def df_to_documents(self, df):
+    def _df_to_documents(self, df):
         """
         Convert dataframe columns into a list of llama_index.Document to be indexed.
         Each doc corresponds to a column with basic stats and a small sample.
@@ -37,7 +37,7 @@ class IndexManager:
         return docs
 
     def build_index(self, df):
-        docs = self.df_to_documents(df)
+        docs = self._df_to_documents(df)
         storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
         self.index = VectorStoreIndex.from_documents(docs, storage_context=storage_context, embed_model=self.embeddings_model)
         return self.index

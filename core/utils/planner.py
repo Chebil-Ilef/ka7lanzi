@@ -1,55 +1,47 @@
-import json, re
-from typing import Dict
+import json
+import pandas as pd
+from typing import Dict, List
 from core.llm import LLM
-from core.prompts import build_planner_prompt
+from core.prompts import planner_prompt
 
 class Planner:
-    def __init__(self, llm_client: LLM):
+    def __init__(self, llm_client: LLM, df: pd.DataFrame = None):
         self.llm = llm_client
+        self.df = df
 
     def plan(self, question: str, dataset_summary: str, columns: list) -> Dict:
-        """
-        Generate a structured plan (JSON) for a given question and dataset.
 
-        Steps:
-        1. Build a prompt for the planner.
-        2. Call the LLM to get raw text output.
-        3. Try to parse JSON from output. If LLM adds extra text, extract first {...}.
-        """
-        prompt_text = build_planner_prompt(question, dataset_summary, columns)
-        messages = [
-            {"role": "system", "content": "You are a strict planner. Return ONLY valid JSON."},
-            {"role": "user", "content": prompt_text}
-        ]
-
-        raw = self.llm.generate(messages)
-        print("LLM RAW OUTPUT:")
-        print(raw)
-
-        plan_str = None
-        if isinstance(raw, list):
-            # e.g., [{"role":"assistant", "content": "..."}]
-            for msg in raw:
-                if msg.get("role") == "assistant" and "content" in msg:
-                    plan_str = msg["content"]
-                    break
-        elif isinstance(raw, str):
-            plan_str = raw
-
-        if plan_str is None:
-            raise ValueError("LLM output does not contain assistant content.")
+        prompt = planner_prompt.format(
+            question=question,
+            summary=dataset_summary,
+            columns=columns
+        )
+        
+        try:
+            raw = self.llm.generate([{"role": "user", "content": prompt}])
+            # print("\n[DEBUG] LLM RAW OUTPUT:")
+            # print(raw)
+        except Exception as e:
+            raise RuntimeError(f"[ERROR] Failed to generate output from LLM: {e}") from e
 
         try:
-            plan = json.loads(plan_str)
-            return plan
+            plan_json = json.loads(raw)
         except json.JSONDecodeError:
-            # fallback: try to extract first {...} block
-            match = re.search(r"\{.*\}", plan_str, re.DOTALL)
-            if match:
-                try:
-                    plan = json.loads(match.group(0))
-                    return plan
-                except json.JSONDecodeError:
-                    raise ValueError(f"LLM output contains invalid JSON:\n{plan_str}")
-            else:
-                raise ValueError(f"LLM output does not contain JSON:\n{plan_str}")
+            import re
+            match = re.search(r'(\{.*\}|\[.*\])', raw, re.DOTALL)
+            if not match:
+                raise ValueError(f"[ERROR] No JSON array detected in LLM output:\n{raw}")
+            try:
+                plan_json = json.loads(match.group(0))
+            except json.JSONDecodeError as e:
+                raise ValueError(f"[ERROR] Failed to parse JSON from LLM output:\n{raw}\n{e}") from e
+
+        if isinstance(plan_json, list):
+            plan = {"actions": plan_json}
+        elif isinstance(plan_json, dict) and "actions" in plan_json:
+            plan = plan_json
+        else:
+            raise ValueError(f"[ERROR] Parsed JSON is invalid or missing 'actions':\n{plan_json}")
+
+        print("\n[DEBUG] PLAN OUTPUT:", plan)
+        return plan
