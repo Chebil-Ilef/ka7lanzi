@@ -1,32 +1,14 @@
+from typing import Dict
 import json
-import pandas as pd
-from typing import Dict, List
-from core.llm import LLM
-from core.prompts import planner_prompt
 
-class Planner:
-    def __init__(self, llm_client: LLM, df: pd.DataFrame = None):
-        self.llm = llm_client
-        self.df = df
 
-    def plan(self, question: str, dataset_summary: str, columns: list) -> Dict:
-
-        prompt = planner_prompt.format(
-            question=question,
-            summary=dataset_summary,
-            columns=columns
-        )
-        
-        try:
-            raw = self.llm.generate([{"role": "user", "content": prompt}])
-            # print("\n[DEBUG] LLM RAW OUTPUT:")
-            # print(raw)
-        except Exception as e:
-            raise RuntimeError(f"[ERROR] Failed to generate output from LLM: {e}") from e
-
+class PlanParser:
+    @staticmethod
+    def parse(raw: str) -> Dict:
         try:
             plan_json = json.loads(raw)
         except json.JSONDecodeError:
+            # fallback regex handling
             import re
             match = re.search(r'(\{.*\}|\[.*\])', raw, re.DOTALL)
             if not match:
