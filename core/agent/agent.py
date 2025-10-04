@@ -1,22 +1,22 @@
-import asyncio
-from typing import Optional, Type
+from typing import Optional, Type, List, Dict, Any
+import pandas as pd
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
 from core.managers.dataset_manager import DatasetManager
 from core.managers.index_manager import IndexManager
 
 from core.interfaces.iplanner import IPlanner
-from core.interfaces.iexecutor import IExecutor
+from core.executor.executor import Executor
 from core.interfaces.ivisualizer import IVisualizer
 
 from core.executor.strategies.correlation import CorrelationStrategy
 from core.executor.strategies.describe import DescribeStrategy
 from core.executor.strategies.groupby import GroupByStrategy
+from core.executor.strategies.topk import TopKStrategy
+from core.executor.strategies.filter import FilterStrategy
+from core.executor.strategies.timeseries import TimeSeriesAggregateStrategy
 
 from core.llm import LLM
-from core.formatter.formatter import Formatter
-
-from core.prompts import executor_prompt
 from config import EMBEDDING_MODEL, DATA_DIR, LLMODEL
 
 
@@ -36,7 +36,7 @@ class WorkflowAgent:
     async def async_init(
             self, 
             planner: IPlanner,
-            executor: type[IExecutor],  
+            executor: Executor,  
             visualizer: IVisualizer,
             embeddings_model: HuggingFaceEmbedding = EMBEDDING_MODEL, 
             llm_client: LLM = LLMODEL,
@@ -49,9 +49,8 @@ class WorkflowAgent:
             self.llm = llm_client
 
             self.planner: IPlanner = planner
-            self.executor: Type[IExecutor] = executor
+            self.executor: Executor = executor
             self.visualizer: IVisualizer = visualizer
-            self.formatter: Formatter = Formatter(self.visualizer)
 
             self._init_finished = True
         except Exception as e:
@@ -76,6 +75,30 @@ class WorkflowAgent:
             raise RuntimeError("IndexManager not initialized")
         self.index_manager.build_index(df)
 
+    def format_results(self, results: List[Dict[str, Any]]):
+        answer_texts = [] 
+        figs = [] 
+        for res in results: 
+            if res["type"] == "answer": 
+                answer_texts.append(res["text"]) 
+            elif res["type"] == "visualize" and res.get("figure") is not None: 
+                figs.append(res["figure"]) 
+            elif res["type"] == "compute": 
+                value = res.get("value")
+                if isinstance(value, (dict, list)):
+                    try:
+                        df = pd.DataFrame(value)
+                        if df.index.name is None and isinstance(value, dict): 
+                            df = df.reset_index().rename(columns={"index": "key"}) 
+                        figs.append(df)
+                    except Exception:
+                        answer_texts.append(str(value)) 
+                else:
+                    answer_texts.append(str(res["value"])) 
+            elif res["type"] == "error": 
+                answer_texts.append(res["message"]) 
+        return { "answer": "\n\n".join(answer_texts).strip(), "figs": figs }
+
     def ask(self, question: str):
         if not self._init_finished:
             raise RuntimeError("Agent is not initialized.")
@@ -96,21 +119,12 @@ class WorkflowAgent:
                 "describe": DescribeStrategy(),
                 "groupby": GroupByStrategy(),
                 "correlation": CorrelationStrategy(),
+                "topk": TopKStrategy(),
+                "filter": FilterStrategy(),
+                "timeseries": TimeSeriesAggregateStrategy()
             }
-            executor: IExecutor = self.executor(df, strategies)
+            executor: Executor = self.executor(df, strategies, self.visualizer)
             exec_results = executor.execute(plan)
+            return self.format_results(exec_results)
         except Exception as e:
             raise RuntimeError(f"Error executing the plan: {e}") from e
-
-        try:
-            
-            context, textual_parts, figs = self.formatter.format(exec_results, df)
-            try:
-                final_answer = self.llm.generate(executor_prompt.format(context=context, question=question))
-            except Exception as e:
-                raise RuntimeError(f"[LLM Error: Failed to generate final answer: {e}]")
-
-        except Exception as e:
-            raise RuntimeError(f"Error during post-processing of execution results: {e}") from e
-
-        return {"answer": final_answer, "figs": figs, "plan": plan}

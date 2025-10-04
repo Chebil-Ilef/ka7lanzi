@@ -2,7 +2,7 @@ from typing import Dict
 from core.llm import LLM
 from core.planner.plan_parser import PlanParser
 from core.interfaces.iplanner import IPlanner
-from core.prompts import planner_prompt
+from core.prompts import PLANNER_PROMPT
 from config import LLMODEL
 
 class Planner(IPlanner):
@@ -11,7 +11,7 @@ class Planner(IPlanner):
 
     def plan(self, question: str, dataset_summary: str, columns: list) -> Dict:
 
-        prompt = planner_prompt.format(
+        prompt = PLANNER_PROMPT.format(
             question=question,
             summary=dataset_summary,
             columns=columns

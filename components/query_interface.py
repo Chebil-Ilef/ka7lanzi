@@ -14,6 +14,6 @@ def query_interface(current_dataset: str, on_query):
         if query.strip():
             result = on_query(current_dataset, query)
             st.session_state['last_query_result'] = result
-            st.text(result)
+            # st.text(result)
         else:
             st.warning("Query is empty.")

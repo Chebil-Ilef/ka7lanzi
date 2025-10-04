@@ -38,6 +38,28 @@ class Visualizer(IVisualizer):
         ax.set_title(f"Histogram {column}")
         return fig
     
+    def barplot(self, df: pd.DataFrame, x: str, y: str = None) -> Figure:
+        fig, ax = plt.subplots(figsize=(6,4))
+        if y:
+            sns.barplot(x=x, y=y, data=df, ax=ax)
+        else:
+            df[x].value_counts().plot(kind='bar', ax=ax)
+        ax.set_title(f"Barplot {x}" if not y else f"Barplot {x} vs {y}")
+        return fig
+
+    def lineplot(self, df: pd.DataFrame, x: str, y: str) -> Figure:
+        fig, ax = plt.subplots(figsize=(6,4))
+        sns.lineplot(x=x, y=y, data=df, ax=ax)
+        ax.set_title(f"Lineplot {y} over {x}")
+        return fig
+    
+    def piechart(self, df: pd.DataFrame, column: str) -> Figure:
+        fig, ax = plt.subplots(figsize=(5,5))
+        df[column].value_counts().plot.pie(autopct='%1.1f%%', ax=ax)
+        ax.set_ylabel('')
+        ax.set_title(f"Pie chart of {column}")
+        return fig
+
     def dispatch(self, df: pd.DataFrame, step: dict) -> Figure | None:
         name = step.get("name")
         params = step.get("params", {})
@@ -52,5 +74,11 @@ class Visualizer(IVisualizer):
             return self.scatter(df, params.get("x"), params.get("y"))
         elif name == "histogram":
             return self.histogram(df, params.get("column"))
+        elif name == "barplot":
+            return self.barplot(df, params.get("x"), params.get("y"))
+        elif name == "lineplot":
+            return self.lineplot(df, params.get("x"), params.get("y"))
+        elif name == "piechart":
+            return self.piechart(df, params.get("column"))
         print("[DEBUG]: Visualization action not considered yet!")
         return None

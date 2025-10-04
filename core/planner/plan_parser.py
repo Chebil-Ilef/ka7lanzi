@@ -5,11 +5,16 @@ import json
 class PlanParser:
     @staticmethod
     def parse(raw: str) -> Dict:
+        import re
+        print("RAW HERE/", raw)
+        cleaned = re.sub(r'```(?:json)?\s*', '', raw)
+        cleaned = re.sub(r'\s*```', '', cleaned)
+        cleaned = cleaned.strip()
+        cleaned = cleaned.replace('{{', '{').replace('}}', '}')
+        print("CLEANED HERE/", cleaned)
         try:
-            plan_json = json.loads(raw)
+            plan_json = json.loads(cleaned)
         except json.JSONDecodeError:
-            # fallback regex handling
-            import re
             match = re.search(r'(\{.*\}|\[.*\])', raw, re.DOTALL)
             if not match:
                 raise ValueError(f"[ERROR] No JSON array detected in LLM output:\n{raw}")
