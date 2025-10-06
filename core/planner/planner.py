@@ -9,13 +9,16 @@ class Planner(IPlanner):
     def __init__(self, llm_client: LLM = LLMODEL):
         self.llm = llm_client
 
-    def plan(self, question: str, dataset_summary: str, columns: list) -> Dict:
+    def plan(self, question: str, dataset_summary: str, columns: list, context: str = None) -> Dict:
 
         prompt = PLANNER_PROMPT.format(
             question=question,
             summary=dataset_summary,
             columns=columns
         )
+
+        if context:
+            prompt += f"\n\n[Retrieved context from dataset]:\n{context}"
         
         try:
             raw = self.llm.generate([{"role": "user", "content": prompt}])

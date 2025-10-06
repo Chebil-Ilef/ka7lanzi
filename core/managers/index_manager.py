@@ -7,13 +7,13 @@ class IndexManager:
     def __init__(self, collection_name="quickstart", embeddings_model=EMBEDDING_MODEL):
         self.embeddings_model = embeddings_model
         self.collection_name = collection_name
-        self.db = chromadb.PersistentClient(path=str(EMBEDDINGS_PATH.resolve()))
+        self.chroma_client = chromadb.PersistentClient(path=str(EMBEDDINGS_PATH.resolve()))
         try:
-            self.collection = self.db.get_collection(collection_name)
+            self.collection = self.chroma_client.get_collection(collection_name)
         except Exception:
-            self.collection = self.db.create_collection(collection_name)
+            self.collection = self.chroma_client.create_collection(collection_name)
         self.vector_store = ChromaVectorStore(chroma_collection=self.collection)
-        self.index = None
+        self.index: VectorStoreIndex = None
 
     def _df_to_documents(self, df):
         """

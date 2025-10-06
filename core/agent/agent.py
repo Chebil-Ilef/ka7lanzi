@@ -1,9 +1,10 @@
-from typing import Optional, Type, List, Dict, Any
+from typing import Optional, List, Dict, Any
 import pandas as pd
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
 from core.managers.dataset_manager import DatasetManager
 from core.managers.index_manager import IndexManager
+from core.retriever.retriever import Retriever
 
 from core.interfaces.iplanner import IPlanner
 from core.executor.executor import Executor
@@ -48,6 +49,7 @@ class WorkflowAgent:
             self.index_manager = IndexManager(embeddings_model=embeddings_model)
             self.llm = llm_client
 
+            self.retriever: Retriever = Retriever(index_manager=self.index_manager)
             self.planner: IPlanner = planner
             self.executor: Executor = executor
             self.visualizer: IVisualizer = visualizer
@@ -108,7 +110,13 @@ class WorkflowAgent:
             raise ValueError("No dataset loaded.")
 
         try:
-            plan = self.planner.plan(question, self.dataset_manager.basic_stats_text(), list(df.columns))
+            context = self.retriever.retrieve(question)
+        except Exception as e:
+            context = None
+            raise RuntimeError(f"Failed to retrieve context from the question: {e}") from e
+
+        try:
+            plan = self.planner.plan(question, self.dataset_manager.basic_stats_text(), list(df.columns), context=context)
             if not plan or not isinstance(plan, dict):
                 raise ValueError("Planner returned an invalid or empty plan.")
         except Exception as e:
