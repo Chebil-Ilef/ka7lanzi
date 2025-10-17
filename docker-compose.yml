@@ -1,0 +1,26 @@
+services:
+  vllm:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.vllm
+    image: analyste-vllm:latest
+    restart: unless-stopped
+    environment:
+      MODEL_NAME: "${VLLM_MODEL:-mistralai/mistral-7b-instruct}"
+    ports:
+      - "8000:8000"
+
+  app:
+    build: .
+    image: analyste-app:latest
+    restart: unless-stopped
+    depends_on:
+      - vllm
+    environment:
+      # Point the app to the local vLLM OpenAI-compatible API
+      OPENAI_API_BASE: "http://vllm:8000/v1"
+      OPENAI_MODEL: "${OPENAI_MODEL:-mistralai/mistral-7b-instruct}"
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app:cached

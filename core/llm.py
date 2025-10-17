@@ -1,8 +1,8 @@
 from threading import Lock
-from llama_cpp import Llama
+import os
+
 
 class LLM:
-    """Singleton for Qwen LLM with chat support"""
 
     _instance = None
     _lock = Lock()
@@ -11,57 +11,72 @@ class LLM:
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
-                    from config import MODEL_PATH
+                    # Lazy import to avoid circular imports (config.py imports LLM)
+                    openai_api_key = os.getenv("OPENAI_API_KEY")
+                    openai_api_base = os.getenv("OPENAI_API_BASE")
+                    # Default to a small open model that vLLM can start quickly
+                    openai_model = os.getenv("OPENAI_MODEL", "facebook/opt-125m")
 
-                    NB_THREADS = 8
-                    NB_GPU_LAYERS = 1
-                    NB_CTX = 1024
+                    try:
+                        import openai
+                    except Exception as e:
+                        raise RuntimeError(
+                            "The 'openai' package is required for LLM but is not installed."
+                        ) from e
+
+                    # Configure API base (for local vLLM OpenAI-compatible server)
+                    if openai_api_base:
+                        openai.api_base = openai_api_base
+
+                    if openai_api_key:
+                        # prefer explicit API key from env (still accepted by vLLM if set)
+                        openai.api_key = openai_api_key
 
                     cls._instance = super().__new__(cls)
-                    cls._instance.llm = Llama(
-                        model_path=str(MODEL_PATH),
-                        n_threads=NB_THREADS,
-                        n_gpu_layers=NB_GPU_LAYERS,
-                        n_ctx=NB_CTX,
-                        use_mmap=True,
-                        use_mlock=True
-                    )
+                    cls._instance.client = openai
+                    cls._instance.model_name = openai_model
         return cls._instance
 
-    def get_llm(self):
-        return self.llm
+    def get_client(self):
+        return self.client
 
-    def generate(self, messages: list|str) -> str:
-        """
-        Generate text from a list of chat messages.
-        Each message should be a dict: {"role": "system|user|assistant", "content": str}
-        """
+    def generate(self, messages: list | str) -> str:
+
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
-        
-        chat_prompt = ""
-        for msg in messages:
-            role = msg["role"]
-            content = msg["content"]
-            chat_prompt += f"<|im_start|>{role}\n{content}<|im_end|>\n"
 
-        MODEL_TEMPERATURE = 0.7
-        TOP_P = 0.95
-        LLM_MAX_TOKENS = 1024
-        REPEAT_PENALTY = 1.1
+        # Ensure messages are in expected shape for OpenAI SDK
+        payload_messages = []
+        for m in messages:
+            role = m.get("role") if isinstance(m, dict) else None
+            content = m.get("content") if isinstance(m, dict) else str(m)
+            if role not in {"system", "user", "assistant"}:
+                # default to user if role missing/invalid
+                role = "user"
+            payload_messages.append({"role": role, "content": content})
+
+        temperature = 0.7
+        top_p = 0.95
+        max_tokens = 1024
 
         try:
             with self._lock:
-                response = self.llm(
-                    chat_prompt,
-                    max_tokens=LLM_MAX_TOKENS,
-                    temperature=MODEL_TEMPERATURE,
-                    top_p=TOP_P,
-                    repeat_penalty=REPEAT_PENALTY,
-                    stop=["</s>", "\n\n"],
-                    echo=False
+                # Use ChatCompletion for widest compatibility
+                resp = self.client.ChatCompletion.create(
+                    model=self.model_name,
+                    messages=payload_messages,
+                    temperature=temperature,
+                    top_p=top_p,
+                    max_tokens=max_tokens,
+                    n=1,
                 )
-                generated_text = response['choices'][0]['text'].strip()
+
+                choice = resp["choices"][0]
+                if "message" in choice:
+                    generated_text = choice["message"].get("content", "").strip()
+                else:
+                    generated_text = choice.get("text", "").strip()
+
                 return generated_text
         except Exception as e:
             print(f"Erreur lors de la génération: {e}")
